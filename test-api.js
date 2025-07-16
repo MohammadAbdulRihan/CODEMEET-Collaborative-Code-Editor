@@ -15,7 +15,7 @@ async function testJudge0API() {
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          'X-RapidAPI-Key': process.env.REACT_X-RapidAPI-Key,
+          'X-RapidAPI-Key': process.env.REACT_X_RapidAPI_Key,
         },
       }
     );
