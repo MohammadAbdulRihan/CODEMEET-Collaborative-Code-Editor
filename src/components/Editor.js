@@ -124,7 +124,7 @@
 // export default Editor;
 
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import CodeMirror from "codemirror";
 import "codemirror/lib/codemirror.css";
 import "codemirror/theme/dracula.css";
@@ -133,8 +133,16 @@ import "codemirror/addon/edit/closetag";
 import "codemirror/addon/edit/closebrackets";
 import ACTIONS from "../Actions";
 
-const Editor = ({ socketRef, roomId, onCodeChange }) => {
+const Editor = forwardRef(({ socketRef, roomId, onCodeChange }, ref) => {
   const editorRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    clearCode: () => {
+      if (editorRef.current) {
+        editorRef.current.setValue("");
+      }
+    },
+  }));
 
   useEffect(() => {
     async function init() {
@@ -190,6 +198,5 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
   }, [socketRef]);
 
   return <textarea id="realtimeEditor"></textarea>;
-};
-
+});
 export default Editor;

@@ -1282,6 +1282,7 @@ import axios from "axios";
 const EditorPage = () => {
   const socketRef = useRef(null);
   const codeRef = useRef(null);
+  const editorComponentRef = useRef(null);
   const location = useLocation();
   const reactNavigator = useNavigate();
   const { roomId } = useParams();
@@ -1386,7 +1387,7 @@ const EditorPage = () => {
 
   const inputClicked = () => {
     const inputArea = document.getElementById("input");
-    inputArea.placeholder = "Enter your input here";
+    inputArea.placeholder = "Enter your input before running code";
     inputArea.value = "";
     inputArea.disabled = false;
     document.getElementById("inputLabel").classList.add("clickedLabel");
@@ -1477,6 +1478,9 @@ ${inputBox.value}
   const clearSavedCode = () => {
     localStorage.removeItem(`savedCode-${roomId}`);
     codeRef.current = "";
+    if (editorComponentRef.current && editorComponentRef.current.clearCode) {
+      editorComponentRef.current.clearCode();
+    }
     socketRef.current.emit(ACTIONS.SYNC_CODE, {
       code: "",
       socketId: socketRef.current.id,
@@ -1488,7 +1492,7 @@ ${inputBox.value}
       <div className="asideWrap">
         <div className="asideInner">
           <div className="logo">
-            <img className="logoImage" src="/code-sync.png" alt="logo" />
+            <img className="logoImage" src="/codemeet.png" alt="logo" />
           </div>
           <h3>Connected</h3>
           <div className="clientsList">
@@ -1534,6 +1538,7 @@ ${inputBox.value}
 
       <div className="editorWrap">
         <Editor
+          ref={editorComponentRef}
           socketRef={socketRef}
           roomId={roomId}
           onCodeChange={(code) => {
