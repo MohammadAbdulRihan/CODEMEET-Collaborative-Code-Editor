@@ -105,7 +105,7 @@ app.post('/run-code', async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          'X-RapidAPI-Key': '329e5ce5f2msh58c8f81ef9ae33ap15d775jsnc5dda11b0742',
+          'X-RapidAPI-Key': process.env.REACT_X_RapidAPI_Key, // Ensure this is set in your .env file
         },
       }
     );
