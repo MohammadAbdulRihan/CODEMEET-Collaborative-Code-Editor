@@ -1,5 +1,6 @@
 const axios = require('axios');
 
+
 async function testJudge0API() {
   try {
     console.log('Testing Judge0 API with new key...');
@@ -15,7 +16,7 @@ async function testJudge0API() {
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          'X-RapidAPI-Key': process.env.REACT_X_RapidAPI_Key,
+          'X-RapidAPI-Key': `329e5ce5f2msh58c8f81ef9ae33ap15d775jsnc5dda11b0742`,
         },
       }
     );
