@@ -22,6 +22,7 @@ const Home = () => {
             return;
         }
         //Redirect
+        
         navigate(`/editor/${roomId}`, {
             state: {
                 username,
@@ -67,7 +68,7 @@ const Home = () => {
                 <div className="home-joinCard">
                     <h3 className="home-joinTitle">Start Coding Together</h3>
                     <div className="home-inputGroup">
-                        <input
+                        <input                                              
                             type="text"
                             className="home-inputBox"
                             placeholder="ROOM ID"

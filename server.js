@@ -69,7 +69,6 @@ io.on("connection", (socket) => {
 
 // API endpoint to run code using Judge0
 
-// app.post('localhost:/run-code', async (req, res) => {
   app.post('/run-code', async (req, res) => {
   const { code, language, input } = req.body;
   
@@ -109,7 +108,7 @@ io.on("connection", (socket) => {
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          'X-RapidAPI-Key':  `329e5ce5f2msh58c8f81ef9ae33ap15d775jsnc5dda11b0742`, // Use API key from .env
+          'X-RapidAPI-Key': process.env.RAPIDAPI_KEY, // Use API key from .env
         },
       }
     );
@@ -126,7 +125,6 @@ io.on("connection", (socket) => {
   }
 });
 
-// Catch-all route for React app - must be after API routes
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });

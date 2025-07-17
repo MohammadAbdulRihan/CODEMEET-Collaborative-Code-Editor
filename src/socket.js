@@ -7,5 +7,6 @@ export const initSocket = async () => {
     timeout: 10000,
     transports: ["websocket"],
   };
-  return io("http://localhost:5001", options);
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
+  return io(backendUrl, options);
 };
