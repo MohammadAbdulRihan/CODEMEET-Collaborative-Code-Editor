@@ -1,6 +1,4 @@
 const axios = require('axios');
-
-
 async function testJudge0API() {
   try {
     console.log('Testing Judge0 API with new key...');

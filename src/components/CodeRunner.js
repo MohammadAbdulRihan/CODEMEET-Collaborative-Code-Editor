@@ -23,7 +23,7 @@ const CodeRunner = ({ socketRef, roomId }) => {
     setError('');
     setOutput('');
     try {
-      const res = await axios.post('http://localhost:5001/run-code', { code, language, input });
+      const res = await axios.post('${process.env.REACT_APP_BACKEND_URL}/run-code', { code, language, input });
       if (res.data.compile_output) {
         setOutput(res.data.compile_output);
       } else if (res.data.stderr) {

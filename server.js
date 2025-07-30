@@ -7,6 +7,7 @@ const ACTIONS = require("./src/Actions");
 const axios = require('axios');
 const dotenv = require('dotenv');
 dotenv.config();
+
 const server = http.createServer(app);
 const io = new Server(server);
 
@@ -16,7 +17,6 @@ app.use(express.static("build"));
 const userSocketMap = {};
 
 function getAllConnectedClients(roomId) {
-  // Map
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
     (socketId) => {
       return {
@@ -43,10 +43,21 @@ io.on("connection", (socket) => {
   });
 
   socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
+    // Broadcast the code change to all clients in the room
+    // This allows all clients to receive the updated code in real-time
     socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
   });
 
+  // Handle user disconnection
+  // This listens for disconnection events and notifies other clients in the room
+
   socket.on(ACTIONS.SEND_MESSAGE, ({ roomId, message }) => {
+    // Broadcast the message to all clients in the room
+    // This allows all clients to receive the message in real-time
+    // The message can be a chat message or any other type of notification
+    // Here, we use the ACTIONS.SEND_MESSAGE action to handle the message sending
+    // The message is emitted to all clients in the specified room
+    // This is useful for chat functionality or any other real-time communication feature
     socket.in(roomId).emit(ACTIONS.SEND_MESSAGE, { message });
   });
 

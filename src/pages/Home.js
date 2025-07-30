@@ -44,7 +44,7 @@ const Home = () => {
             <p>A real-time collaborative coding platform for teams</p>
 
         </div> */}
-                <div class="hero-section"><div class="hero-content"><h1>Welcome to CodeMeet</h1><h2>A real-time collaborative coding platform for teams</h2></div></div>
+                <div className="hero-section"><div className="hero-content"><h1>Welcome to CodeMeet</h1><h2>A real-time collaborative coding platform for teams</h2></div></div>
             </header>
             <h2 className="home-heroSubtitle">A real-time collaborative coding platform providing ...</h2>
             <div className="home-heroSection">
