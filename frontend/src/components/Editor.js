@@ -15,7 +15,7 @@ import ACTIONS from "../Actions";
 // It also listens for code changes from other clients and updates the editor accordingly
 // The editor is configured for JavaScript with a Dracula theme and supports auto-closing tags and
 
-const Editor = ({ socketRef, roomId, onCodeChange }) => {
+const Editor = ({ socketRef, roomId, onCodeChange, initialCode = "" }) => {
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +31,10 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
         }
       );
 
+      if (initialCode) {
+        editorRef.current.setValue(initialCode);
+      }
+
       editorRef.current.on("change", (instance, changes) => {
         const { origin } = changes;
         const code = instance.getValue();
@@ -44,7 +48,7 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
       });
     }
     init();
-  }, []);
+  }, [initialCode]);
 
   useEffect(() => {
     if (socketRef.current) {

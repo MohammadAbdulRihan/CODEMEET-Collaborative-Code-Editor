@@ -3,7 +3,7 @@ const app = express();
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
-const ACTIONS = require("./src/Actions");
+const ACTIONS = require("./Actions");
 const axios = require('axios');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -12,7 +12,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static("build"));
+app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
 
 const userSocketMap = {};
 
@@ -137,7 +137,7 @@ io.on("connection", (socket) => {
 });
 
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+  res.sendFile(path.join(__dirname, "..", "frontend", "build", "index.html"));
 });
 
 const PORT = process.env.PORT || 5001;

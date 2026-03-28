@@ -1,4 +1,6 @@
 const axios = require('axios');
+require('dotenv').config();
+
 async function testJudge0API() {
   try {
     console.log('Testing Judge0 API with new key...');

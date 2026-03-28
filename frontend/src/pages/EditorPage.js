@@ -574,14 +574,20 @@ import axios from "axios";
 
 const EditorPage = () => {
   const socketRef = useRef(null);
-  const codeRef = useRef(null);
+  const codeRef = useRef("");
   const location = useLocation();
   const reactNavigator = useNavigate();
   const { roomId } = useParams();
+  const codeStorageKey = `savedCode-${roomId}`;
   const [clients, setClients] = useState([]);
 
   useEffect(() => {
     const init = async () => {
+      const savedCode = localStorage.getItem(codeStorageKey);
+      if (savedCode) {
+        codeRef.current = savedCode;
+      }
+
       // Initialize the socket connection
       socketRef.current = await initSocket();
 
@@ -640,7 +646,7 @@ const EditorPage = () => {
       socketRef.current.off(ACTIONS.SEND_MESSAGE);
       socketRef.current.disconnect();
     };
-  }, []);
+  }, [codeStorageKey, location.state?.username, reactNavigator, roomId]);
 
   async function copyRoomId() {
     try {
@@ -732,6 +738,42 @@ const EditorPage = () => {
         "Something went wrong, Please check your code and input.";
     });
   };
+
+  const downloadCode = () => {
+    const code = codeRef.current || "";
+    const selectedLanguage = document.getElementById("languageOptions")?.value || "17";
+    const extensionMap = {
+      "1": "cs",
+      "4": "java",
+      "5": "py",
+      "6": "c",
+      "7": "cpp",
+      "8": "php",
+      "11": "hs",
+      "12": "rb",
+      "13": "pl",
+      "17": "js",
+      "20": "go",
+      "21": "scala",
+      "37": "swift",
+      "38": "sh",
+      "43": "kt",
+      "60": "ts",
+    };
+
+    const extension = extensionMap[selectedLanguage] || "txt";
+    const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `code-${roomId}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+    toast.success("Code downloaded");
+  };
+
   const sendMessage = () => {
     if (document.getElementById("inputBox").value === "") return;
     var message = `> ${location.state.username}:\n${
@@ -793,6 +835,9 @@ const EditorPage = () => {
         <button className="btn copyBtn" onClick={copyRoomId}>
           Copy ROOM ID
         </button>
+        <button className="btn copyBtn" onClick={downloadCode}>
+          Download Code
+        </button>
         <button className="btn leaveBtn" onClick={leaveRoom}>
           Leave
         </button>
@@ -802,8 +847,10 @@ const EditorPage = () => {
         <Editor
           socketRef={socketRef}
           roomId={roomId}
+          initialCode={codeRef.current}
           onCodeChange={(code) => {
             codeRef.current = code;
+            localStorage.setItem(codeStorageKey, code);
           }}
         />
         <div className="IO-container">
