@@ -3,18 +3,29 @@ const app = express();
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
+const { PrismaClient } = require("@prisma/client");
 const ACTIONS = require("./Actions");
 const axios = require('axios');
+const cors = require('cors');
 const dotenv = require('dotenv');
 dotenv.config();
 
 const server = http.createServer(app);
 const io = new Server(server);
+const prisma = new PrismaClient();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
 
+app.use(cors({
+  origin: "http://localhost:3000",
+  credentials: true,
+}));
+
 const userSocketMap = {};
+const socketUserIdMap = {};
+const roomSaveTimeouts = new Map();
+const pendingRoomDisconnects = new Map();
 
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
@@ -29,29 +40,94 @@ function getAllConnectedClients(roomId) {
 
 io.on("connection", (socket) => {
   console.log("socket connected", socket.id);
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
-    userSocketMap[socket.id] = username;
+  const handleJoinRoom = async ({ roomId, username, userId }) => {
+    if (!roomId) {
+      return;
+    }
+
+    const resolvedUsername = username || userSocketMap[socket.id] || "Anonymous";
+    const resolvedUserId = userId || socketUserIdMap[socket.id] || socket.id;
+    const presenceKey = `${roomId}:${resolvedUserId}`;
+    const pendingDisconnect = pendingRoomDisconnects.get(presenceKey);
+    const isRefreshReconnect = Boolean(pendingDisconnect);
+
+    if (pendingDisconnect) {
+      clearTimeout(pendingDisconnect);
+      pendingRoomDisconnects.delete(presenceKey);
+    }
+
+    userSocketMap[socket.id] = resolvedUsername;
+    socketUserIdMap[socket.id] = resolvedUserId;
     socket.join(roomId);
     const clients = getAllConnectedClients(roomId);
     clients.forEach(({ socketId }) => {
       io.to(socketId).emit(ACTIONS.JOINED, {
         clients,
-        username,
+        username: resolvedUsername,
+        userId: resolvedUserId,
+        isRefreshReconnect,
         socketId: socket.id,
       });
     });
-  });
 
-  socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
-    // Broadcast the code change to all clients in the room
-    // This allows all clients to receive the updated code in real-time
-    socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
-  });
+    try {
+      const room = await prisma.room.findUnique({
+        where: { id: roomId },
+      });
+
+      socket.emit("loadCode", room?.code || "");
+      socket.emit("loadChat", room?.chat || "");
+    } catch (err) {
+      console.error("Error loading code:", err);
+      socket.emit("loadCode", null);
+      socket.emit("loadChat", null);
+    }
+  };
+
+  socket.on(ACTIONS.JOIN, handleJoinRoom);
+  socket.on("joinRoom", handleJoinRoom);
+
+  const handleCodeChange = ({ roomId, code }) => {
+    if (!roomId) {
+      return;
+    }
+
+    socket.to(roomId).emit(ACTIONS.CODE_CHANGE, { code });
+    socket.to(roomId).emit("codeUpdate", code);
+
+    const existingTimeout = roomSaveTimeouts.get(roomId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        await prisma.room.upsert({
+          where: { id: roomId },
+          update: { code },
+          create: { id: roomId, code },
+        });
+      } catch (err) {
+        console.error("Error saving code:", err);
+      } finally {
+        roomSaveTimeouts.delete(roomId);
+      }
+    }, 1000);
+
+    roomSaveTimeouts.set(roomId, timeout);
+  };
+
+  socket.on(ACTIONS.CODE_CHANGE, handleCodeChange);
+  socket.on("codeChange", handleCodeChange);
 
   // Handle user disconnection
   // This listens for disconnection events and notifies other clients in the room
 
-  socket.on(ACTIONS.SEND_MESSAGE, ({ roomId, message }) => {
+  socket.on(ACTIONS.SEND_MESSAGE, async ({ roomId, message }) => {
+    if (!roomId || !message) {
+      return;
+    }
+
     // Broadcast the message to all clients in the room
     // This allows all clients to receive the message in real-time
     // The message can be a chat message or any other type of notification
@@ -59,6 +135,25 @@ io.on("connection", (socket) => {
     // The message is emitted to all clients in the specified room
     // This is useful for chat functionality or any other real-time communication feature
     socket.in(roomId).emit(ACTIONS.SEND_MESSAGE, { message });
+
+    try {
+      const updatedRows = await prisma.$executeRaw`
+        UPDATE "Room"
+        SET "chat" = COALESCE("chat", '') || ${message}
+        WHERE "id" = ${roomId}
+      `;
+
+      if (updatedRows === 0) {
+        await prisma.room.create({
+          data: {
+            id: roomId,
+            chat: message,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Error saving chat:", err);
+    }
   });
 
   socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
@@ -66,14 +161,32 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", () => {
-    const rooms = [...socket.rooms];
+    const rooms = [...socket.rooms].filter((roomId) => roomId !== socket.id);
+    const username = userSocketMap[socket.id];
+    const userId = socketUserIdMap[socket.id] || socket.id;
+
     rooms.forEach((roomId) => {
-      socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
-        socketId: socket.id,
-        username: userSocketMap[socket.id],
-      });
+      const presenceKey = `${roomId}:${userId}`;
+      const existingTimeout = pendingRoomDisconnects.get(presenceKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      const timeout = setTimeout(() => {
+        io.to(roomId).emit(ACTIONS.DISCONNECTED, {
+          socketId: socket.id,
+          username,
+          userId,
+          isRefreshReconnect: false,
+        });
+        pendingRoomDisconnects.delete(presenceKey);
+      }, 1500);
+
+      pendingRoomDisconnects.set(presenceKey, timeout);
     });
+
     delete userSocketMap[socket.id];
+    delete socketUserIdMap[socket.id];
     socket.leave();
   });
 });

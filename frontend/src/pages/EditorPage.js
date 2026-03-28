@@ -579,13 +579,35 @@ const EditorPage = () => {
   const reactNavigator = useNavigate();
   const { roomId } = useParams();
   const codeStorageKey = `savedCode-${roomId}`;
+  const chatStorageKey = `savedChat-${roomId}`;
   const [clients, setClients] = useState([]);
+  const [editorCode, setEditorCode] = useState("");
+  const [chatLog, setChatLog] = useState("");
+
+  let userId = localStorage.getItem("userId");
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem("userId", userId);
+  }
+
+  const username =
+    location.state?.username ||
+    localStorage.getItem("username") ||
+    `User-${userId.slice(0, 8)}`;
+
+  localStorage.setItem("username", username);
 
   useEffect(() => {
     const init = async () => {
       const savedCode = localStorage.getItem(codeStorageKey);
       if (savedCode) {
         codeRef.current = savedCode;
+        setEditorCode(savedCode);
+      }
+
+      const savedChat = localStorage.getItem(chatStorageKey);
+      if (savedChat) {
+        setChatLog(savedChat);
       }
 
       // Initialize the socket connection
@@ -599,32 +621,53 @@ const EditorPage = () => {
         toast.error("Socket connection failed, try again later.");
         reactNavigator("/");
       }
-      
-      // Emit join event to the server
-      // with roomId and username from location state
-      socketRef.current.emit(ACTIONS.JOIN, {
-        roomId,
-        username: location.state?.username,
+
+      socketRef.current.on("loadCode", (savedCodeFromDb) => {
+        if (savedCodeFromDb == null) {
+          return;
+        }
+
+        const nextCode = savedCodeFromDb;
+        codeRef.current = nextCode;
+        setEditorCode(nextCode);
+        localStorage.setItem(codeStorageKey, nextCode);
+      });
+
+      socketRef.current.on("codeUpdate", (nextCode) => {
+        if (nextCode == null) {
+          return;
+        }
+
+        codeRef.current = nextCode;
+        setEditorCode(nextCode);
+        localStorage.setItem(codeStorageKey, nextCode);
+      });
+
+      socketRef.current.on("loadChat", (savedChatFromDb) => {
+        if (savedChatFromDb == null) {
+          return;
+        }
+
+        setChatLog(savedChatFromDb);
+        localStorage.setItem(chatStorageKey, savedChatFromDb);
       });
 
       socketRef.current.on(
         ACTIONS.JOINED,
-        ({ clients, username, socketId }) => {
-          if (username !== location.state?.username) {
+        ({ clients, username, isRefreshReconnect }) => {
+          if (!isRefreshReconnect && username !== localStorage.getItem("username")) {
             toast.success(`${username} joined the room.`);
             // console.log(`${username} joined`);
           }
           setClients(clients);
-          socketRef.current.emit(ACTIONS.SYNC_CODE, {
-            code: codeRef.current,
-            socketId,
-          });
         }
       );
 
       //Listeing for disconnected
-      socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
-        toast.success(`${username} left the room.`);
+      socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username, isRefreshReconnect }) => {
+        if (!isRefreshReconnect) {
+          toast.success(`${username} left the room.`);
+        }
         setClients((prev) => {
           return prev.filter((client) => client.socketId !== socketId);
         });
@@ -632,21 +675,39 @@ const EditorPage = () => {
 
       //Listening for message
       socketRef.current.on(ACTIONS.SEND_MESSAGE, ({ message }) => {
-        const chatWindow = document.getElementById("chatWindow");
-        var currText = chatWindow.value;
-        currText += message;
-        chatWindow.value = currText;
-        chatWindow.scrollTop = chatWindow.scrollHeight;
+        setChatLog((prev) => {
+          const nextChat = prev + message;
+          localStorage.setItem(chatStorageKey, nextChat);
+          return nextChat;
+        });
+      });
+
+      socketRef.current.emit("joinRoom", {
+        roomId,
+        username,
+        userId,
       });
     };
     init();
     return () => {
-      socketRef.current.off(ACTIONS.JOINED);
-      socketRef.current.off(ACTIONS.DISCONNECTED);
-      socketRef.current.off(ACTIONS.SEND_MESSAGE);
-      socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.off("loadCode");
+        socketRef.current.off("codeUpdate");
+        socketRef.current.off("loadChat");
+        socketRef.current.off(ACTIONS.JOINED);
+        socketRef.current.off(ACTIONS.DISCONNECTED);
+        socketRef.current.off(ACTIONS.SEND_MESSAGE);
+        socketRef.current.disconnect();
+      }
     };
-  }, [codeStorageKey, location.state?.username, reactNavigator, roomId]);
+  }, [chatStorageKey, codeStorageKey, reactNavigator, roomId, username, userId]);
+
+  useEffect(() => {
+    const chatWindow = document.getElementById("chatWindow");
+    if (chatWindow) {
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+  }, [chatLog]);
 
   async function copyRoomId() {
     try {
@@ -662,7 +723,7 @@ const EditorPage = () => {
     reactNavigator("/");
   }
 
-  if (!location.state) {
+  if (!roomId) {
     return <Navigate to="/" />;
   }
 
@@ -697,6 +758,7 @@ const EditorPage = () => {
     const lang = document.getElementById("languageOptions").value;
     const input = document.getElementById("input").value;
     const code = codeRef.current;
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
 
     // Map language choice to our backend language names
     const languageMap = {
@@ -719,7 +781,7 @@ const EditorPage = () => {
 
     toast.loading("Running Code....");
 
-    axios.post('/run-code', {
+    axios.post(`${backendUrl}/run-code`, {
       code,
       language,
       input
@@ -735,6 +797,8 @@ const EditorPage = () => {
       toast.dismiss();
       toast.error("Code compilation unsuccessful");
       document.getElementById("input").value =
+        error.response?.data?.details ||
+        error.response?.data?.error ||
         "Something went wrong, Please check your code and input.";
     });
   };
@@ -775,16 +839,19 @@ const EditorPage = () => {
   };
 
   const sendMessage = () => {
-    if (document.getElementById("inputBox").value === "") return;
-    var message = `> ${location.state.username}:\n${
-      document.getElementById("inputBox").value
+    const inputBox = document.getElementById("inputBox");
+    if (!inputBox || inputBox.value.trim() === "") return;
+
+    var message = `> ${username}:\n${
+      inputBox.value
     }\n`;
-    const chatWindow = document.getElementById("chatWindow");
-    var currText = chatWindow.value;
-    currText += message;
-    chatWindow.value = currText;
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-    document.getElementById("inputBox").value = "";
+
+    setChatLog((prev) => {
+      const nextChat = prev + message;
+      localStorage.setItem(chatStorageKey, nextChat);
+      return nextChat;
+    });
+    inputBox.value = "";
     socketRef.current.emit(ACTIONS.SEND_MESSAGE, { roomId, message });
   };
   const handleInputEnter = (key) => {
@@ -847,9 +914,10 @@ const EditorPage = () => {
         <Editor
           socketRef={socketRef}
           roomId={roomId}
-          initialCode={codeRef.current}
+          externalCode={editorCode}
           onCodeChange={(code) => {
             codeRef.current = code;
+            setEditorCode(code);
             localStorage.setItem(codeStorageKey, code);
           }}
         />
@@ -881,7 +949,8 @@ const EditorPage = () => {
           id="chatWindow"
           className="chatArea textarea-style"
           placeholder="Chat messages will appear here"
-          disabled
+          value={chatLog}
+          readOnly
         ></textarea>
         <div className="sendChatWrap">
           <input

@@ -9,13 +9,16 @@
     "test-api": "node test-api.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.2",
     "axios": "^1.3.4",
     "codemeet-workspace": "file:..",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.0",
     "express": "^4.17.3",
     "socket.io": "^4.4.1"
   },
   "devDependencies": {
-    "nodemon": "^2.0.20"
+    "nodemon": "^2.0.20",
+    "prisma": "^6.19.2"
   }
 }
