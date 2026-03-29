@@ -11,14 +11,26 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const server = http.createServer(app);
-const io = new Server(server);
+const allowedOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
+
+const io = new Server(server, {
+  cors: {
+    origin: corsOrigin,
+    credentials: true,
+  },
+});
 const prisma = new PrismaClient();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
 
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: corsOrigin,
   credentials: true,
 }));
 
